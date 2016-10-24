@@ -1,0 +1,371 @@
+    dimensions:                                         
+      - name: __time                                    
+        kind: time                                      
+                                                        
+      - name: page                                      
+                                                        
+      - name: user                                      
+                                                        
+      - name: channel                                   
+                                                        
+      - name: namespace                                 
+                                                        
+      - name: comment                                   
+                                                        
+      - name: flags                                     
+                                                        
+      - name: diffUrl                                   
+                                                        
+      - name: isNew                                     
+        kind: boolean                                   
+                                                        
+      - name: isMinor                                   
+        kind: boolean                                   
+                                                        
+      - name: isRobot                                   
+                                                        
+                                                                                    
+      - name: isUnpatrolled                                                           
+        kind: boolean                                                                 
+                                                                                      
+    measures:                                                                         
+      - name: count                                                                   
+        title: Edits                                                                  
+        expression: $main.sum($count)                                                 
+                                                                                      
+      - name: delta                                                                   
+                                                                                      
+      - name: avg_delta                                                               
+        expression: $main.sum($delta) / $main.sum($count)                             
+                                                                                      
+      - name: added                                                                   
+                                                                                      
+      - name: avg_added                                                               
+        expression: $main.sum($added) / $main.sum($count)                                                                                     
+                                                        
+#----------------------------------------------------------------------------------------------------------------------
+
+echo '
+{ "queryType" : "dataSourceMetadata",  
+  "dataSource": "wikipedia" 
+  }
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+#----------------------------------------------------------------------------------------------------------------------
+
+echo '
+{ "queryType" : "timeBoundary",  
+  "dataSource": "wikipedia" 
+  }
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+#----------------------------------------------------------------------------------------------------------------------
+
+echo '
+{
+  "queryType":"segmentMetadata",
+  "dataSource": "wikipedia", 
+  "intervals": ["2010-01-01/2020-01-01"]
+}
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+#----------------------------------------------------------------------------------------------------------------------
+
+echo '
+{ "queryType": "select", 
+  "dataSource": "wikipedia", 
+  "granularity":"all",  
+  "intervals": ["2010-01-01/2020-01-01"],
+  "pagingSpec": {"pagingIdentifiers": {}, "threshold":5}
+ }
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+              
+              
+#---------------------------------------------------------------------------------------------------------------------- 
+// option 1: ingested raw data with selection
+echo '
+{ "queryType": "select", 
+  "dataSource": "wikipedia", 
+  "dimensions":["namespace","comment"],
+  "metrics":["delta","count"],  
+  "granularity":"all",  
+  "intervals":["2016-10-17T08:59:53.829Z/2016-10-17T09:00:00.000Z"],  
+  "pagingSpec": {"pagingIdentifiers": {"wikipedia_2016-10-17T08:00:00.000Z_2016-10-17T09:00:00.000Z_2016-10-17T08:51:56.608Z" : 5}, "threshold":5}
+ }
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+
+// option 2: ingested raw data with timeseries, skipping empty backets, not recommended.
+echo '
+{
+  "queryType":"timeseries",
+  "dataSource":"wikipedia",
+  "intervals":["2016-10-17T08:59:53.829Z/2016-10-17T09:00:00.000Z"],  
+  "granularity":"none",  
+  "aggregations":[
+      { "type": "count", "name": "rows"},
+      { "type": "doubleSum", "fieldName": "count",  "name": "edits" },
+      { "type": "doubleSum", "fieldName": "delta",  "name": "delta" },
+      { "type": "doubleSum", "fieldName": "added",  "name": "added" },
+      { "type": "doubleSum", "fieldName": "deleted",  "name": "deleted" }
+  ],
+  "context" : {
+    "skipEmptyBuckets": "true"
+  }  
+}
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+
+
+#----------------------------------------------------------------------------------------------------------------------
+// custom duration granularity
+
+echo '
+{
+  "queryType":"timeseries",
+  "dataSource":"wikipedia",
+  "intervals": ["2010-01-01/2020-01-01"],
+  "granularity":{"type": "duration", "duration": 1800000, "origin": "2010-01-01"},  
+  "aggregations":[
+      { "type": "count", "name": "rows"},
+      { "type": "doubleSum", "fieldName": "count",  "name": "edits" },
+      { "type": "doubleSum", "fieldName": "delta",  "name": "delta" },
+      { "type": "doubleSum", "fieldName": "added",  "name": "added" },
+      { "type": "doubleSum", "fieldName": "deleted",  "name": "deleted" }
+  ],
+  "context" : {
+    "skipEmptyBuckets": "true"
+  }  
+}
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+
+#----------------------------------------------------------------------------------------------------------------------
+
+echo '
+{
+  "queryType":"groupBy",
+  "dataSource":"wikipedia",
+  "intervals":["2010-01-01/2020-01-01"],  
+  "granularity":"hour,  
+  "dimensions": ["namespace"],
+  "limitSpec": {"type":"default", "limit":5, "columns":[{"dimension": "delta", "direction":"descending"}]},
+  "aggregations":[
+      { "type": "count", "name": "rows"},
+      { "type": "doubleSum", "fieldName": "count",  "name": "count" },
+      { "type": "doubleSum", "fieldName": "delta",  "name": "delta" },
+      { "type": "doubleSum", "fieldName": "added",  "name": "added" },
+      { "type": "doubleSum", "fieldName": "deleted",  "name": "deleted" },
+      { "type": "cardinality", "name": "dist_user", "fieldNames": [ "user" ]},
+      { "type": "cardinality", "name": "dist_page", "fieldNames": [ "page" ]}
+  ]
+}
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+
+# "filter": {"type": "selector", "dimension": "namespace", "value": "Anexo" }
+  
+#----------------------------------------------------------------------------------------------------------------------
+
+echo '
+{
+  "queryType": "topN",
+  "dataSource": "wikipedia",
+  "intervals":["2010-01-01/2020-01-01"],    
+  "dimension": "namespace",
+  "threshold": 3,
+  "metric": "delta",
+  "granularity": "all",
+  "aggregations":[
+      { "type": "count", "name": "rows"},
+      { "type": "doubleSum", "fieldName": "count",  "name": "count" },
+      { "type": "doubleSum", "fieldName": "delta",  "name": "delta" },
+      { "type": "doubleSum", "fieldName": "added",  "name": "added" },
+      { "type": "doubleSum", "fieldName": "deleted",  "name": "deleted" }
+  ],
+  "postAggregations": [
+    {
+      "type": "arithmetic",
+      "name": "avg_added",
+      "fn": "/",
+      "fields": [
+        {
+          "type": "fieldAccess",
+          "name": "added",
+          "fieldName": "added"
+        },
+        {
+          "type": "fieldAccess",
+          "name": "count",
+          "fieldName": "count"
+        }
+      ]
+    }
+  ]
+}
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+#----------------------------------------------------------------------------------------------------------------------
+
+echo '
+{
+  "queryType": "search",
+  "dataSource": "wikipedia",
+  "granularity": "all",
+  "searchDimensions": [
+    "namespace"
+  ],
+  "query": {
+    "type": "insensitive_contains",
+    "value": "wiki"
+  },
+  "sort" : {
+    "type": "lexicographic"
+  },
+  "intervals":[
+    "2010-01-01/2020-01-01"
+  ]
+}
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+
+#----------------------------------------------------------------------------------------------------------------------
+
+// DataSketches aggregator
+http://druid.io/docs/latest/development/extensions-core/datasketches-aggregators.html
+
+#----------------------------------------------------------------------------------------------------------------------
+                                            SQL 
+
+// command line tool for data exploration
+bin/plyql --host localhost:8082 -q "SELECT page, sum(count) as Edits FROM wikipedia where '2010-01-01T00:00:00' <= __time AND __time < '2020-01-01T00:00:00' and   isRobot='false' group by page order by Edits desc LIMIT 5"
+
+
+// JDBC driver
+
+sudo ./sqline
+!connect jdbc:calcite:model=~/share/sql/calcit/druid-wiki-model.json
+!connect jdbc:calcite:schemaFactory=org.apache.calcite.adapter.druid.DruidSchemaFactory
+
+select distinct "page" from "wikipedia"; 
+select sum("count") from "wikipedia" group by floor("__time" to HOUR);
+select distinct "page" from "wikipedia" where "isRobot"=true; 
+select "__time" from "wikipedia" limit 1; 
+select floor("__time" to DAY) as "day", sum("added") from "wikipedia" group by floor("__time" to DAY); 
+select sum("added") as "s", "page", floor("__time" to DAY) as "day" from "wikipedia" group by "page", floor("__time" to DAY) order by "s" desc; 
+select distinct "page" from "wikipedia" order by 1 desc  offset 2 rows fetch next 3 rows only;
+select sum("count") as cnt from "wikipedia" where "__time" >= '1996-01-01 00:00:00' and "__time" < '2998-01-01 00:00:00'; 
+select count(*) as c from "wikipedia" where extract(year from "__time") = 2016 and extract(month from "__time") in (10,11); 
+select "page", cast(count(*) as integer) as cnt from "wikipedia" group by "page" having count(*)>10 order by cnt desc limit 5; 
+
+-- schema discovery does not works good, it overlooks some fields
+-- usage of "__time" is not consistent
+-- not clear how to use boolean columns
+
+// ordering by standard time dim does not work (but it works if it is just dimension, one of others)
+select "page" from "wikipedia" order by "__time" desc limit 1;
+// max of varchar fields fails as if it expects ints only
+select max("namespace") as c from "wikipedia";
+// time expressions can be used in very limited way, matter of experiments         
+select extract(month from "__time") as c from "wikipedia" limit 1;        
+
+#----------------------------------------------------------------------------------------------------------------------        
+// loader console
+http://localhost:9095/
+
+// coordinator console
+http://localhost:18081/
+
+http://localhost:8090/console.html
+
+#----------------------------------------------------------------------------------------------------------------------                        
+
+// batch load
+
+cat ~/imply-1.2.1/pageviews-csv-index.json | sudo curl -X 'POST' -H 'Content-Type:application/json' -d @- localhost:8090/druid/indexer/v1/task
+
+#----------------------------------------------------------------------------------------------------------------------                        
+// deleting datasource
+
+// first we need to disable datasource
+curl -X DELETE "http://localhost:8081/druid/coordinator/v1/datasources/metrics-kafka" 
+
+// and then kill all its segments 
+echo '{ "type": "kill", "dataSource": "metrics-kafka", "interval" :  "2010-01-01/2020-01-01" }' | sudo curl -X 'POST' -H 'Content-Type:application/json' -d @- localhost:8090/druid/indexer/v1/task
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/datasources" | python -mjson.tool 
+              
+// check here 
+http://localhost:18081/
+              
+#----------------------------------------------------------------------------------------------------------------------                        
+
+// metainfo about data sources http://druid.io/docs/latest/design/coordinator.html
+
+curl -X GET "http://localhost:8081/status" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/leader" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/loadstatus" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/loadstatus?simple" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/loadstatus?full" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/loadqueue" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/loadqueue?simple" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/loadqueue?full" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/metadata/datasources" 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/metadata/datasources?full" | python -mjson.tool
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/metadata/datasources/optanix" | python -mjson.tool 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/metadata/datasources/optanix/segments" | python -mjson.tool 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/metadata/datasources/{dataSourceName}/segments?full" | python -mjson.tool 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/metadata/datasources/{dataSourceName}/segments/optanix_2016-07-19T00:00:00.000Z_2016-07-20T00:00:00.000Z_2016-10-19T12:09:25.218Z" | python -mjson.tool 
+
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/datasources" | python -mjson.tool 
+ 
+curl -X GET "http://localhost:8081/druid/coordinator/v1/datasources/optanix/intervals" | python -mjson.tool 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/datasources/optanix/intervals?full" | python -mjson.tool 
+
+curl -X GET "http://localhost:8081/druid/coordinator/v1/datasources/{dataSourceName}/tiers" | python -mjson.tool 
+
+#----------------------------------------------------------------------------------------------------------------------                        
+
+
+
+
+echo '
+{ "queryType" : "dataSourceMetadata",  
+  "dataSource": "metrics-kafka" 
+  }
+' | curl -X POST 'localhost:8082/druid/v2/?pretty' -H 'Content-Type:application/json' -d @-
+
+
+
+
+// Grafana and grafana plugins
+
+    #cd ~
+    #sudo bash -c 'echo "deb https://packagecloud.io/grafana/stable/debian/ wheezy main" > /etc/apt/sources.list'
+    #sudo curl https://packagecloud.io/gpg.key | sudo apt-key add -
+    #sudo apt-get update
+    #sudo apt-get install grafana
+    #sudo update-rc.d grafana-server defaults 95 10  
+    
+    cd ~
+    #sudo git clone https://github.com/quantiply/grafana-druid-wikipedia.git
+    #sudo git clone https://github.com/quantiply/grafana-plugins.git
+    #cd /etc/grafana
+    #sudo ln -s ~/grafana-druid-wikipedia/config.js config.js
+    #sudo ln -s ~/grafana-druid-wikipedia/dashboards/wikipedia.json app/dashboards/wikipedia.json
+    #sudo ln -s ~/grafana-plugins/features plugins/features

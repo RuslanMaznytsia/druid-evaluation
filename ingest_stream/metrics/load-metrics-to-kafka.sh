@@ -1,0 +1,1 @@
+python ../kafka-load-csv.py --broker-list localhost:9092 --topic metrics --file ../../data/metrics/metrics.csv    

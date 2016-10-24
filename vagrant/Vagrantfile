@@ -1,0 +1,207 @@
+require 'getoptlong'
+opts = GetoptLong.new(
+        [ '--share', GetoptLong::OPTIONAL_ARGUMENT ]
+)
+
+share = ''
+opts.each do |opt, arg|
+ case opt
+   when '--share'
+    share = arg
+ end
+end
+
+if share=='' && ARGV[0]=='up' then
+  raise Vagrant::Errors::VagrantError.new, "usage: vagrant --share=\"<share dir on host>\" up"
+end
+
+if ARGV[0]=='up' then
+  puts "share = #{share}"
+end
+
+
+
+Vagrant.configure(2) do |config|
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = 8192
+    vb.cpus = 2
+  end
+
+  config.vm.define "dev" do |dev|
+    dev.vm.host_name = "druid-dev-box"
+    dev.vm.box = "ubuntu/trusty64"    
+  end
+  
+  config.ssh.username = 'vagrant'
+  config.ssh.password = 'vagrant'
+  config.ssh.insert_key = 'true'
+  
+  config.vm.network "private_network", type: "dhcp"
+  config.vm.network "forwarded_port", guest: 9095, host: 9095    # pivot http server
+  config.vm.network "forwarded_port", guest: 8088, host: 8088    # caravel http server
+  config.vm.network "forwarded_port", guest: 8082, host: 8082    # druid broker
+  config.vm.network "forwarded_port", guest: 8081, host: 18081   # druid coordinator  
+  config.vm.network "forwarded_port", guest: 8090, host: 8090    # druid payload  
+  config.vm.network "forwarded_port", guest: 3001, host: 3001    # graphana http server
+  config.vm.network "forwarded_port", guest: 3000, host: 3000    # metabase http server
+  
+  config.vm.synced_folder "#{share}", "/home/vagrant/share", create: true
+  config.vm.provision :shell, :inline => "sudo rm /etc/localtime && sudo ln -s /usr/share/zoneinfo/Europe/Kiev /etc/localtime", run: "always"
+
+  $shell = <<-SHELL
+    # register repositories
+    sudo apt-key update
+    sudo apt-get update  
+    
+    # install Java 1.8
+    cd ~
+    sudo add-apt-repository -y ppa:webupd8team/java
+    sudo apt-get update
+    echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select true | sudo /usr/bin/debconf-set-selections
+    sudo apt-get install -y oracle-java8-installer
+    sudo update-java-alternatives -s java-8-oracle
+    sudo apt-get install oracle-java8-set-default
+    
+    # install and configure zsh and other untilities
+    cd ~
+    sudo apt-get install -y curl git zsh htop lsof iotop zip unzip gcc libev4 emacs24 tree 
+    sudo sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+    sudo chsh -s /bin/zsh vagrant
+    sudo chown vagrant.vagrant -R ~/.oh-my-zsh
+    sudo chown vagrant.vagrant ~/.zshrc    
+    
+    # intall Maven 
+    sudo apt-get install -y maven
+
+    # install NodeJS
+    cd ~
+    sudo curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+
+    # install Druid
+    cd ~
+    sudo curl -O http://static.imply.io/release/imply-1.2.1.tar.gz
+    sudo tar -xzf imply-1.2.1.tar.gz
+    
+    # install Confluent Kafka
+    cd ~
+    sudo curl -O http://packages.confluent.io/archive/3.0/confluent-3.0.0-2.11.tar.gz
+    sudo tar -xzf confluent-3.0.0-2.11.tar.gz    
+    
+    # install Scala 
+	sudo apt-get remove scala-library scala
+    sudo wget http://www.scala-lang.org/files/archive/scala-2.11.8.deb
+    sudo dpkg -i scala-2.11.8.deb
+    sudo apt-get update
+    sudo apt-get install scala
+
+    # install sbt
+    echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+    sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+    sudo apt-get update
+    sudo apt-get install sbt
+    
+    # install and build Calcit
+    cd ~
+    sudo curl -O https://www.apache.org/dist/calcite/apache-calcite-1.10.0/apache-calcite-1.10.0-src.tar.gz 
+    sudo tar -xzf apache-calcite-1.10.0-src.tar.gz
+    cd apache-calcite-1.10.0-src
+    sudo mvn install -DskipTests -Dcheckstyle.skip=true
+    # sudo cp ~/share/calcit/druid-wiki-model.json ~/apache-calcite-1.10.0-src/druid/src/test/resources/druid-wiki-model.json
+    
+    # prepare Wikipedia data
+    cd ~
+    sudo curl -O http://static.imply.io/quickstart/kafka-wikiticker.tar.gz
+    sudo tar -xzf kafka-wikiticker.tar.gz
+    
+    # install Caravel
+    cd ~    
+    sudo apt-get install -y build-essential libssl-dev libffi-dev python-dev python-pip libsasl2-dev libldap2-dev
+    sudo pip install virtualenv
+    sudo virtualenv venv
+    sudo . ./venv/bin/activate
+    sudo pip install --upgrade setuptools pip
+    sudo pip install caravel
+    fabmanager create-admin --app caravel --username admin --password admin --firstname admin --lastname admin --email admin@gmail.com
+    caravel db upgrade
+    caravel load_examples
+    caravel init    
+    deactivate
+    
+    
+    # install Graphana
+    cd~
+    sudo curl -O https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.linux-x64.tar.gz 
+    sudo tar -zxvf grafana-3.1.1-1470047149.linux-x64.tar.gz
+    sudo mkdir /var/lib/grafana/dashboards
+    sudo mv grafana-3.1.1-1470047149 grafana-3.1.1    
+    sudo cp ~/share/reporting/grafana/custom.ini ~/grafana-3.1.1/conf/custom.ini
+
+    
+    # install Metabase
+    sudo mkdir ~/metabase
+    cd ~/metabase
+    sudo curl http://downloads.metabase.com/v0.20.0/metabase.jar -O
+    
+    
+    # start up Caravel
+    cd ~
+    . ./venv/bin/activate    
+    caravel runserver -p 8088 &
+    deactivate
+    
+    
+    # start up Grafana
+    #sudo service grafana-server start    
+    cd ~/grafana-3.1.1
+    sudo ./bin/grafana-server web &
+
+    
+    # start Metabase
+    cd ~/metabase
+    sudo java -jar metabase.jar &
+    
+    
+    # start up Imply with Pivot
+    cd ~/imply-1.2.1
+    # sudo ./bin/supervise -c ./conf/supervise/quickstart.conf &
+    # sudo ./bin/supervise -c ~/share/ingest_stream/metrics/supervise-metrics.conf &
+    sudo kill $(ps -elf | grep supervise | awk '{print $4}')
+    sudo ./bin/supervise -c ~/share/ingest_stream/optanix/supervise-optanix.conf &
+
+    
+    # start up Confluent Kafka
+    cd ~/confluent-3.0.0
+    sudo bash -c 'echo "delete.topic.enable=true" >> ./etc/kafka/server.properties'    
+    sudo ./bin/kafka-server-start ./etc/kafka/server.properties &
+    #sudo ./bin/kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic metrics    
+    sudo ./bin/kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic optanix
+
+    
+    # prepare Optanix data
+    cd ~/share/data/optanix
+    sudo ./convert_optanix_to_csv.sh
+    
+    
+    # ingest batch
+    cd ~
+    #cat ~/share/optanix_data/optanix-perf-csv-index.json | sudo curl -X 'POST' -H 'Content-Type:application/json' -d @- localhost:8090/druid/indexer/v1/task
+    #cat ~/share/optanix_data/pageviews-json-index.json | sudo curl -X 'POST' -H 'Content-Type:application/json' -d @- localhost:8090/druid/indexer/v1/task
+    #cat ~/share/optanix_data/pageviews-csv-index.json | sudo curl -X 'POST' -H 'Content-Type:application/json' -d @- localhost:8090/druid/indexer/v1/task
+    
+    
+    # ingest stream
+    cd ~
+    sudo pip install kafka-python        
+    cd ~/share/ingest_stream
+    python kafka-load-csv.py --broker-list localhost:9092 --topic metrics --file metrics/metrics.csv    
+    
+  SHELL
+  
+  config.vm.provision "shell", inline: $shell, privileged: false
+  
+  # autostart
+  config.vm.define "dev"
+  
+end

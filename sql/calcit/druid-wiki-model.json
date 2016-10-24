@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "defaultSchema": "test",
+  "schemas": [
+    {
+      "type": "custom",
+      "name": "test",
+      "factory": "org.apache.calcite.adapter.druid.DruidSchemaFactory",
+      "operand": {
+        "url": "http://localhost:8082",
+        "coordinatorUrl": "http://localhost:8081"
+      },
+      "tables": [
+        {
+          "name": "wikipedia",
+          "factory": "org.apache.calcite.adapter.druid.DruidTableFactory",
+          "operand": {
+            "dataSource": "wikipedia",
+            "interval": "1900-01-09T00:00:00.000Z/2992-01-10T00:00:00.000Z",
+            "timestampColumn": "__time",
+            "dimensions": [
+              "page",
+              "user",                                    
+              "channel",
+              "namespace",
+              "comment",
+              "diffUrl",
+              "isNew",
+              "isMinor",
+              "isRobot",
+              "isUnpatrolled"
+            ],
+            "metrics": [
+              {
+                "name" : "count",
+                "type" : "count"
+              },
+              {
+                "name" : "added",
+                "type" : "longSum",
+                "fieldName" : "added"
+              },
+              {
+                "name" : "delta",
+                "type" : "longSum",
+                "fieldName" : "delta"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "type" : "index",
+  "spec" : {
+  
+    "ioConfig": {
+      "type": "index",
+      "firehose": {
+        "type": "local",
+        "baseDir": "/home/vagrant/share",
+        "filter": "pageviews.csv"
+      }
+    },
+    
+    "dataSchema" : {
+    
+      "dataSource" : "pageviews",
+      
+      "granularitySpec": {
+        "type": "uniform",
+        "segmentGranularity": "day",
+        "queryGranularity": "none",
+        "intervals": ["2015-09-01/2015-09-02"]
+      },
+
+      "parser" : {
+        "type" : "string",
+        "parseSpec" : {
+          "format" : "csv",
+          "dimensionsSpec": {
+             "dimensions": ["url", "user"]             
+          },
+          "columns": [ "time","url","user","latencyMs" ],
+          "timestampSpec" : {
+            "format" : "auto",
+            "column" : "time"
+          }
+        }
+      },
+      
+      "metricsSpec": [
+        {"name": "views", "type": "count"},
+        {"name": "latencyMs", "type": "doubleSum", "fieldName": "latencyMs"}
+      ]
+      
+    }
+    
+  }
+}

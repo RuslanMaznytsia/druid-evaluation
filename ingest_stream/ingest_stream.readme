@@ -1,0 +1,139 @@
+------------------------------------------------------------------------------
+// Tranqulity
+
+~/confluent-3.0.0/bin/kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic metrics
+
+~/imply-1.2.1/bin/generate-example-metrics
+
+~/confluent-3.0.0/bin/kafka-console-producer --broker-list localhost:9092 --topic metrics
+
+
+~/confluent-3.0.0/bin/kafka-console-consumer --zookeeper localhost:2181 --topic optanix --from-beginning
+
+~/imply-1.2.1/dist/tranquility/bin/tranquility server -configFile ~/imply-1.2.1/conf-quickstart/tranquility/server.json
+                                                                  ~/imply-1.2.1/conf-quickstart/tranquility/kafka-metrics-json.json
+                                                                  ~/imply-1.2.1/conf-quickstart/tranquility/kafka-metrics-csv.json
+                                                                  ~/kafka-wikiticker/conf/quickstart.conf
+
+~/imply-1.2.1/dist/tranquility/bin/tranquility server -configFile ~/share/ingest_stream/metrics/kafka-metrics-csv.json
+
+                                                                  
+cd ~/imply-1.2.1
+sudo ./bin/supervise -c ./conf/supervise/tranquility-metrics-csv.conf &
+                                                                  
+~/imply-1.2.1/conf/supervise/quickstart.conf
+
+nano /home/vagrant/imply-1.2.1/var/sv/tranquility-kafka.log
+
+------------------------------------------------------------------------------
+// delete topic in kafka
+
+sudo nano ~/confluent-3.0.0/etc/kafka/server.properties
+
+append
+delete.topic.enable=true
+---------------
+
+~/confluent-3.0.0/bin/kafka-topics --delete --zookeeper localhost:2181 --topic optanix
+sudo ~/confluent-3.0.0/bin/zookeeper-shell localhost:2181 rmr /brokers/topics/metrics
+
+~/confluent-3.0.0/bin/kafka-topics --zookeeper localhost:2181 --list
+
+
+
+------------------------------------------------------------------------------
+// load csv with python
+
+pip install kafka-python
+
+---------
+kafka-load-csv.py
+
+
+import sys, argparse
+from kafka import SimpleProducer, KafkaClient
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--broker-list', help='')
+parser.add_argument('--topic', help='')
+parser.add_argument('--file', help='')
+args = parser.parse_args()
+print(args)
+
+
+kafka = KafkaClient("localhost:9092")
+producer = SimpleProducer(kafka)
+
+file = open(args.file, 'r')
+for line in file:
+    line = line.replace("\n", "")
+    producer.send_messages(args.topic,line)
+    
+------    
+python kafka-load-csv.py --broker-list localhost:9092 --topic metrics --file metrics.csv    
+
+------
+metrics.csv
+
+milliseconds,GET,114,2016-10-20T11:11:47Z,200,/list,request/latency,www5.yours.com
+milliseconds,GET,96,2016-10-20T11:11:47Z,200,/get/83,request/latency,www5.yours.com
+milliseconds,GET,116,2016-10-20T11:11:47Z,200,/,request/latency,www4.yours.com
+
+------------------------------------------------------------------------------
+
+// re-start optanix 
+
+sudo ~/confluent-3.0.0/bin/kafka-topics --delete --zookeeper localhost:2181 --topic optanix
+sleep 3
+~/confluent-3.0.0/bin/kafka-topics --zookeeper localhost:2181 --list
+sudo ~/confluent-3.0.0/bin/kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic optanix
+sudo ~/confluent-3.0.0/bin/zookeeper-shell localhost:2181 rmr /tranquility/beams
+sudo kill $(ps -elf | grep supervise | awk '{print $4}')
+sudo kill $(ps -elf | grep tranquility | awk '{print $4}')
+sudo kill $(ps -elf | grep zoo | awk '{print $4}')
+sleep 10
+
+cd ~/imply-1.2.1 && bin/run-zk conf-quickstart &; cd -
+cd ~/imply-1.2.1 && bin/run-druid coordinator conf-quickstart &; cd -
+cd ~/imply-1.2.1 && bin/run-druid broker conf-quickstart &; cd -
+cd ~/imply-1.2.1 && bin/run-druid historical conf-quickstart &; cd -
+cd ~/imply-1.2.1 && bin/run-druid overlord conf-quickstart &; cd -
+cd ~/imply-1.2.1 && bin/run-druid middleManager conf-quickstart &; cd -
+cd ~/imply-1.2.1 && bin/run-pivot ~/share/reporting &; cd -
+cd ~/imply-1.2.1 && bin/tranquility kafka -configFile ~/share/ingest_stream/optanix/kafka-optanix-csv.json &; cd -
+
+
+cd ~/imply-1.2.1 && sudo ./bin/supervise -c ~/share/ingest_stream/optanix/supervise-optanix.conf & ; cd -
+cd ~/share/ingest_stream/optanix/ && sudo ./load-optanix-to-kafka.sh ; cd -
+
+
+pstree -a -h -l <supervise process ID>
+
+// check optanix 
+ps -elf | grep supervise
+~/confluent-3.0.0/bin/kafka-console-consumer --zookeeper localhost:2181 --topic optanix --from-beginning
+date +%s
+watch -n 5 tail -n 10 /home/vagrant/imply-1.2.1/var/sv/tranquility-kafka.log
+
+1477062558
+
+
+
+2016-10-21 15:24:45,659 [KafkaConsumer-0] INFO  io.druid.guice.JsonConfigurator - Loaded class[class io.druid.guice.ExtensionsConfig] from props[druid.extensions.] as [ExtensionsConfig{searchCurrentClassloader=true, directory='extensions', hadoopDependenciesDir='hadoop-dependencies', loadList=null}]
+2016-10-21 15:24:46,180 [KafkaConsumer-0] INFO  c.metamx.emitter.core.LoggingEmitter - Start: started [true]
+2016-10-21 15:24:47,384 [ClusteredBeam-ZkFuturePool-a0b63a50-1884-46ef-8b9e-7c42691bfc34] INFO  c.m.tranquility.beam.ClusteredBeam - Global latestCloseTime[2016-10-01T00:00:00.000Z] for identifier[druid:overlord/optanix] has moved past timestamp[2016-10-01T00:00:00.000Z], not creating merged beam
+2016-10-21 15:24:47,393 [ClusteredBeam-ZkFuturePool-a0b63a50-1884-46ef-8b9e-7c42691bfc34] INFO  c.m.tranquility.beam.ClusteredBeam - Turns out we decided not to actually make beams for identifier[druid:overlord/optanix] timestamp[2016-10-01T00:00:00.000Z]. Returning None.
+2016-10-21 15:24:47,475 [ClusteredBeam-ZkFuturePool-a0b63a50-1884-46ef-8b9e-7c42691bfc34] INFO  c.m.tranquility.beam.ClusteredBeam - Global latestCloseTime[2016-10-01T00:00:00.000Z] for identifier[druid:overlord/optanix] has moved past timestamp[2016-10-01T00:00:00.000Z], not creating merged beamonds. (kafka.coordinator.GroupMetadataManager)
+2016-10-21 15:24:47,481 [ClusteredBeam-ZkFuturePool-a0b63a50-1884-46ef-8b9e-7c42691bfc34] INFO  c.m.tranquility.beam.ClusteredBeam - Turns out we decided not to actually make beams for identifier[druid:overlord/optanix] timestamp[2016-10-01T00:00:00.000Z]. Returning None.
+2016-10-21 15:24:47,498 [ClusteredBeam-ZkFuturePool-a0b63a50-1884-46ef-8b9e-7c42691bfc34] INFO  c.m.tranquility.beam.ClusteredBeam - Global latestCloseTime[2016-10-01T00:00:00.000Z] for identifier[druid:overlord/optanix] has moved past timestamp[2016-10-01T00:00:00.000Z], not creating merged beam
+2016-10-21 15:24:47,503 [ClusteredBeam-ZkFuturePool-a0b63a50-1884-46ef-8b9e-7c42691bfc34] INFO  c.m.tranquility.beam.ClusteredBeam - Turns out we decided not to actually make beams for identifier[druid:overlord/optanix] timestamp[2016-10-01T00:00:00.000Z]. Returning None.
+2016-10-21 15:24:54,657 [KafkaConsumer-CommitThread] INFO  c.m.tranquility.kafka.KafkaConsumer - Flushed {optanix={receivedCount=3, sentCount=0, droppedCount=3, unparseableCount=0}} pending messages in 8ms and committed offsets in 10ms.
+2016-10-21 15:25:09,659 [KafkaConsumer-CommitThread] INFO  c.m.tranquility.kafka.KafkaConsumer - Flushed {optanix={receivedCount=0, sentCount=0, droppedCount=0, unparseableCount=0}} pending messages in 0ms and committed offsets in 0ms.
+
+
+
+Global latestCloseTime for identifier[druid:overlord] has moved past timestamp
+
+
+
+

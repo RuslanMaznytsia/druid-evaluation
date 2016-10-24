@@ -1,0 +1,87 @@
+{
+  "properties" : { 
+    "zookeeper.connect" : "localhost",                                                                                                                                                  
+    "druid.discovery.curator.path" : "/druid/discovery",                                                                                                                                
+    "druid.selectors.indexing.serviceName" : "druid/overlord",                                                                                                                          
+    "commit.periodMillis" : "15000",                                                                                                                                                    
+    "consumer.numThreads" : "2",                                                                                                                                                        
+    "kafka.zookeeper.connect" : "localhost",                                                                                                                                            
+    "kafka.group.id" : "tranquility-kafka"                                                                                                                                              
+  },   
+                  
+  "dataSources" : {   
+  
+    "optanix" : {        
+    
+      "properties" : {                                                                                                                                                                  
+        "task.partitions" : "1",                                                                                                                                                        
+        "task.replicants" : "1",                                                                                                                                                        
+        "topicPattern" : "optanix"
+      },          
+    
+      "spec" : {       
+
+        "ioConfig" : {                                                                                                                                                                  
+          "type" : "realtime"                                                                                                                                                           
+        }, 
+        
+        "tuningConfig" : {                                                                                                                                                              
+          "type" : "realtime",                                                                                                                                                          
+          "maxRowsInMemory" : "100000",                                                                                                                                                 
+          "intermediatePersistPeriod" : "P1D",
+          "windowPeriod" : "P365D"
+        },         
+        
+        
+        "dataSchema" : {   
+        
+          "dataSource" : "optanix", 
+          
+          "granularitySpec" : {                                                                                                                                                         
+            "type" : "uniform",                                                                                                                                                         
+            "segmentGranularity" : "month",
+            "queryGranularity" : "none"                                                                                                                                                 
+          },           
+          
+          "parser" : {
+            "type" : "string",
+            "parseSpec" : {
+              "format" : "csv",
+              "dimensionsSpec" : {
+                "dimensions" : ["ip","m_label","_id","d_desc",                       "m_cat","optx_hostname",         "device","metric","m_unit","m_desc"]
+              },
+              "columns":       ["ip","m_label","_id","d_desc","m_ds","m_max","m_val","m_cat","optx_hostname","m_time","device","metric","m_unit","m_desc"],
+              "timestampSpec" : {
+                "format" : "posix",
+                "column" : "m_time"
+              }
+            }
+          },
+          
+          "metricsSpec" : [
+            {
+              "name" : "count",
+              "type" : "count"
+            },
+            {
+              "name" : "m_ds",
+              "type" : "longSum",
+              "fieldName" : "m_ds"
+            },
+            {
+              "name" : "m_max",
+              "type" : "longSum",
+              "fieldName" : "m_max"
+            },
+            {
+              "name" : "m_val",
+              "type" : "longSum",
+              "fieldName" : "m_val"
+            }
+          ]
+          
+        }       
+      }
+    }              
+  }     
+}                  

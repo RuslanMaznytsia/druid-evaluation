@@ -1,0 +1,3 @@
+{"unit": "milliseconds", "http_method": "GET", "value": 114, "timestamp": "2016-10-20T09:20:47Z", "http_code": "200", "page": "/list", "metricType": "request/latency", "server": "www5.example.com"}
+{"unit": "milliseconds", "http_method": "GET", "value": 96, "timestamp": "2016-10-20T09:20:47Z", "http_code": "200", "page": "/get/83", "metricType": "request/latency", "server": "www5.example.com"}
+{"unit": "milliseconds", "http_method": "GET", "value": 116, "timestamp": "2016-10-20T09:20:47Z", "http_code": "200", "page": "/", "metricType": "request/latency", "server": "www4.example.com"}

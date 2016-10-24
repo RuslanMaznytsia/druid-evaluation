@@ -1,0 +1,3 @@
+milliseconds,GET,114,2016-10-20T19:09:47Z,200,/list,request/latency,www5.example.com
+milliseconds,GET,96,2016-10-20T19:09:47Z,200,/get/83,request/latency,www5.example.com
+milliseconds,GET,116,2016-10-20T19:09:47Z,200,/,request/latency,www4.example.com

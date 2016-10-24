@@ -1,0 +1,1 @@
+python ../kafka-load-csv.py --broker-list localhost:9092 --topic optanix --file ../../data/optanix/perf_dump_a.csv    

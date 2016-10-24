@@ -1,0 +1,1 @@
+cat ~/share/ingest_batch/metrics/metrics-json-index.json | sudo curl -X 'POST' -H 'Content-Type:application/json' -d @- localhost:8090/druid/indexer/v1/task

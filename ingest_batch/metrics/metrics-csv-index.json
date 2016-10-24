@@ -1,0 +1,73 @@
+{
+  "type" : "index",
+  
+  "spec" : {
+  
+    "ioConfig": {
+      "type": "index",
+      "firehose": {
+        "type": "local",
+        "baseDir": "/home/vagrant/share/data/metrics",
+        "filter": "metrics.csv"
+      }
+    },
+    
+    "dataSchema" : {
+    
+      "dataSource" : "metrics",
+      
+      "granularitySpec": {
+        "type": "uniform",
+        "segmentGranularity": "day",
+        "queryGranularity": "none",
+        "intervals": ["2000-01-01/2020-12-31"]
+      },
+
+      "parser" : {                                                                                                                                                                  
+            "type" : "string",                                                                                                                                                          
+            "parseSpec" : {                                                                                                                                                             
+              "format" : "csv",                                                                                                                                                         
+              "timestampSpec" : {                                                                                                                                                       
+                "column" : "timestamp",                                                                                                                                                 
+                "format" : "auto"                                                                                                                                                       
+              },                                                                                                                                                                        
+              "dimensionsSpec" : {                                                                                                                                                      
+                "dimensions" : [],                                                                                                                                                      
+                "dimensionExclusions" : [                                                                                                                                               
+                  "timestamp",                                                                                                                                                          
+                  "value"                                                                                                                                                               
+                ]                                                                                                                                                                       
+              },                                                                                                                                                                        
+              "columns": [                                                                                                                                                              
+                "unit","http_method","value","timestamp","http_code","page","metricType","server"                                                                                       
+              ]                                                                                                                                                                         
+            }                                                                                                                                                                           
+      },                                                                                                                                                                            
+
+      
+     "metricsSpec" : [                                                                                                                                                             
+            {                                                                                                                                                                           
+              "type" : "count",                                                                                                                                                         
+              "name" : "count"                                                                                                                                                          
+            },                                                                                                                                                                          
+            {                                                                                                                                                                           
+              "name" : "value_sum",                                                                                                                                                     
+              "type" : "doubleSum",                                                                                                                                                     
+              "fieldName" : "value"                                                                                                                                                     
+            },                                                                                                                                                                          
+            {                                                                                                                                                                           
+              "fieldName" : "value",                                                                                                                                                    
+              "name" : "value_min",                                                                                                                                                     
+              "type" : "doubleMin"                                                                                                                                                      
+            },                                                                                                                                                                          
+            {                                                                                                                                                                           
+              "type" : "doubleMax",                                                                                                                                                     
+              "name" : "value_max",                                                                                                                                                     
+              "fieldName" : "value"                                                                                                                                                     
+            }                                                                                                                                                                           
+          ]                                                                                                                                                                             
+     
+    }
+    
+  }
+}

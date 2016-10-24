@@ -1,0 +1,66 @@
+{
+  "type" : "index",
+  
+  "spec" : {
+
+    "ioConfig": {
+      "type": "index",
+      "firehose": {
+        "type": "local",
+        "baseDir": "/home/vagrant/share/optanix_data",
+        "filter": "perf_dump_*.csv"
+      }
+    },  
+
+    "dataSchema" : {
+    
+      "dataSource" : "optanix",
+      
+      "granularitySpec" : {
+        "type" : "uniform",
+        "segmentGranularity" : "month",
+        "queryGranularity" : "none",
+        "intervals" : ["2000-01-01/2020-12-31"]
+      },
+      
+      "parser" : {
+        "type" : "string",
+        "parseSpec" : {
+          "format" : "csv",
+          "dimensionsSpec" : {
+             "dimensions" : ["ip","m_label","_id","d_desc",                       "m_cat","optx_hostname",         "device","metric","m_unit","m_desc"]
+          },
+          "columns":        ["ip","m_label","_id","d_desc","m_ds","m_max","m_val","m_cat","optx_hostname","m_time","device","metric","m_unit","m_desc"],
+          "timestampSpec" : {
+            "format" : "posix",
+            "column" : "m_time"
+          }
+        }
+      },
+      
+      
+      "metricsSpec" : [
+        {
+          "name" : "count",
+          "type" : "count"
+        },
+        {
+          "name" : "m_ds",
+          "type" : "longSum",
+          "fieldName" : "m_ds"
+        },
+        {
+          "name" : "m_max",
+          "type" : "longSum",
+          "fieldName" : "m_max"
+        },
+        {
+          "name" : "m_val",
+          "type" : "longSum",
+          "fieldName" : "m_val"
+        }
+      ]
+      
+    }
+  }
+}
